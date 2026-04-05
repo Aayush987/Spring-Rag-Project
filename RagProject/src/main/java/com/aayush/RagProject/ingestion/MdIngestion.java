@@ -1,5 +1,6 @@
 package com.aayush.RagProject.ingestion;
 
+import com.aayush.RagProject.chunking.model.Chunk;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -8,6 +9,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 @Slf4j
@@ -30,10 +34,153 @@ public class MdIngestion {
     public void ingestSingleFile(Path filePath) {
         log.info("Reading File {}", filePath.getFileName());
          try{
-             String content = Files.readString(filePath);
-             log.info("Ingestion for {} done", filePath.getFileName());
-         } catch (Exception e) {
+             String content = removeFrontmatter(Files.readString(filePath));
+             List<String> rawChunks = chunkMarkdown(content);
+             content = null;
+
+             int index = 0;
+             int totalProcessed = 0;
+
+             for (String chunkText : rawChunks) {
+
+                 String section = extractSection(chunkText);
+
+                 Chunk chunk = Chunk.builder()
+                         .content(addSectionContext(chunkText, section))
+                         .chunkIndex(index++)
+                         .source(filePath.toString())
+                         .section(section)
+                         .metadata(Map.of(
+                                 "fileName", filePath.getFileName().toString()
+                         ))
+                         .build();
+                 processChunk(chunk); // ✅ Process immediately, don't accumulate
+                 totalProcessed++;
+
+                 if (index % 50 == 0) {
+                     log.info("Processed {} chunks so far for {}", index, filePath.getFileName());
+                 }
+             }
+             rawChunks = null;
+             log.info("✅ Total chunks processed: {} for {}", totalProcessed, filePath.getFileName());
+
+         }catch (OutOfMemoryError e) {
+             log.error("OOM while processing file: {}. File may be too large.", filePath.getFileName());
+             throw new RuntimeException("Out of memory processing file: " + filePath.getFileName(), e);
+         }
+         catch (Exception e) {
              throw new RuntimeException("Error ingesting this file",e);
          }
+    }
+
+    private void processChunk(Chunk chunk) {
+        // e.g., vectorStore.save(chunk); or embeddingService.embed(chunk);
+        log.info("Processing chunk [{}] from {}", chunk.getChunkIndex(), chunk.getSource());
+    }
+
+    /*
+        ExtractSection working:
+        line = "## Thread Lifecycle"
+        line.startsWith("#") → ✅ true
+        line.replace("#", "") → " Thread Lifecycle"
+        .trim() → "Thread Lifecycle"
+     */
+    private String extractSection(String text) {
+        String[] lines = text.split("\n");
+        for (String line : lines) {
+            if (line.startsWith("#")) {
+                return line.replace("#", "").trim();
+            }
+        }
+        return "General";
+    }
+
+    private String addSectionContext(String content, String section) {
+        return "[" + section + "]\n\n" + content;
+    }
+
+    private List<String> chunkMarkdown(String content) {
+        List<String> sections = splitBySections(content);
+        List<String> finalChunks = new ArrayList<>();
+
+        int MAX_SIZE = 1000;
+
+        for (String section : sections) {
+            if (section.length() > MAX_SIZE) {
+                finalChunks.addAll(splitLargeChunk(section, MAX_SIZE));
+            } else {
+                finalChunks.add(section);
+            }
+        }
+
+        return finalChunks;
+    }
+
+    /**
+     * Removes frontmatter (metadata block) from the beginning of a string.
+     * Frontmatter is expected to be enclosed between '---' markers.
+     * Example:
+     * Input:
+     * ---
+     * title: Hello
+     * author: Sam
+     * ---
+     * This is the actual content.
+     *
+     * Output:
+     * This is the actual content.
+     *
+     * @param content the full text content that may contain frontmatter
+     * @return the content without the frontmatter block, or original content if none found
+     */
+
+    private String removeFrontmatter(String content) {
+        if (content.startsWith("---")) {
+            int end = content.indexOf("\n---", 3);
+            if (end != -1) {
+                return content.substring(end + 4).trim();
+            }
+        }
+        return content;
+    }
+
+public List<String> splitBySections(String content) {
+    List<String> sections = new ArrayList<>();
+
+    String[] lines = content.split("\n");
+    StringBuilder current = new StringBuilder();
+
+    for (String line : lines) {
+        if (line.startsWith("#")) {
+            if (!current.isEmpty()) {
+                sections.add(current.toString().trim());
+                current = new StringBuilder();
+            }
+        }
+        current.append(line).append("\n");
+    }
+
+    if (!current.isEmpty()) {
+        sections.add(current.toString().trim());
+    }
+
+    return sections;
+}
+
+    public List<String> splitLargeChunk(String text, int maxSize) {
+        List<String> chunks = new ArrayList<>();
+
+        int overlap = 100;
+        int start = 0;
+
+        while (start < text.length()) {
+            int end = Math.min(start + maxSize, text.length());
+            chunks.add(text.substring(start, end));
+            if (end == text.length()) break;
+
+            start = end - overlap;
+        }
+
+        return chunks;
     }
 }
