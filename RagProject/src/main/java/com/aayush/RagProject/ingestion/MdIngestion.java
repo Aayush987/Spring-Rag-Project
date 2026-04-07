@@ -1,6 +1,9 @@
 package com.aayush.RagProject.ingestion;
 
 import com.aayush.RagProject.chunking.model.Chunk;
+import com.aayush.RagProject.embedding.model.EmbeddedChunk;
+import com.aayush.RagProject.embedding.service.EmbeddingService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -16,8 +19,11 @@ import java.util.stream.Stream;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MdIngestion {
     private static final String DIRECTORY =  "repo/";
+
+    private final EmbeddingService embeddingService;
 
     public void ingestFiles() {
         Path rootPath = Paths.get(DIRECTORY);
@@ -76,6 +82,7 @@ public class MdIngestion {
     private void processChunk(Chunk chunk) {
         // e.g., vectorStore.save(chunk); or embeddingService.embed(chunk);
         log.info("Processing chunk [{}] from {}", chunk.getChunkIndex(), chunk.getSource());
+        EmbeddedChunk embeddedChunk = embeddingService.embed(chunk);
     }
 
     /*
