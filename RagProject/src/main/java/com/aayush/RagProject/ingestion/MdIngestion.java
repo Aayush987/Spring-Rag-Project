@@ -3,6 +3,7 @@ package com.aayush.RagProject.ingestion;
 import com.aayush.RagProject.chunking.model.Chunk;
 import com.aayush.RagProject.embedding.model.EmbeddedChunk;
 import com.aayush.RagProject.embedding.service.EmbeddingService;
+import com.aayush.RagProject.vectorstore.VectorStoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class MdIngestion {
     private static final String DIRECTORY =  "repo/";
 
     private final EmbeddingService embeddingService;
+    private final VectorStoreService vectorStoreService;
 
     public void ingestFiles() {
         Path rootPath = Paths.get(DIRECTORY);
@@ -82,7 +84,8 @@ public class MdIngestion {
     private void processChunk(Chunk chunk) {
         // e.g., vectorStore.save(chunk); or embeddingService.embed(chunk);
         log.info("Processing chunk [{}] from {}", chunk.getChunkIndex(), chunk.getSource());
-        EmbeddedChunk embeddedChunk = embeddingService.embed(chunk);
+//        EmbeddedChunk embeddedChunk = embeddingService.embed(chunk);
+        vectorStoreService.store(chunk);
     }
 
     /*
