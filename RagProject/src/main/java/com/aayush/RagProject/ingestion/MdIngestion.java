@@ -6,6 +6,8 @@ import com.aayush.RagProject.embedding.service.EmbeddingService;
 import com.aayush.RagProject.vectorstore.VectorStoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -14,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -25,7 +28,8 @@ public class MdIngestion {
     private static final String DIRECTORY =  "repo/";
 
     private final EmbeddingService embeddingService;
-    private final VectorStoreService vectorStoreService;
+//    private final VectorStoreService vectorStoreService;
+    private final VectorStore vectorStore;
 
     public void ingestFiles() {
         Path rootPath = Paths.get(DIRECTORY);
@@ -40,14 +44,19 @@ public class MdIngestion {
     }
 
     public void ingestSingleFile(Path filePath) {
+
         log.info("Reading File {}", filePath.getFileName());
+        final int BATCH_SIZE = 50;
          try{
              String content = removeFrontmatter(Files.readString(filePath));
              List<String> rawChunks = chunkMarkdown(content);
-             content = null;
+
+//
+//             content = null;
 
              int index = 0;
              int totalProcessed = 0;
+             List<Document> batch = new ArrayList<>(BATCH_SIZE);
 
              for (String chunkText : rawChunks) {
 
@@ -62,14 +71,24 @@ public class MdIngestion {
                                  "fileName", filePath.getFileName().toString()
                          ))
                          .build();
-                 processChunk(chunk); // ✅ Process immediately, don't accumulate
+
+                 batch.add(toDocument(chunk));
+
+                 if (batch.size() >= BATCH_SIZE) {
+                     vectorStore.add(batch);
+                     batch.clear();
+                 }
+
                  totalProcessed++;
 
-                 if (index % 50 == 0) {
+                 if (index % 100 == 0) {
                      log.info("Processed {} chunks so far for {}", index, filePath.getFileName());
                  }
              }
-             rawChunks = null;
+             if (!batch.isEmpty()) {
+                 vectorStore.add(batch);
+             }
+//             rawChunks = null;
              log.info("✅ Total chunks processed: {} for {}", totalProcessed, filePath.getFileName());
 
          }catch (OutOfMemoryError e) {
@@ -81,12 +100,36 @@ public class MdIngestion {
          }
     }
 
-    private void processChunk(Chunk chunk) {
-        // e.g., vectorStore.save(chunk); or embeddingService.embed(chunk);
-        log.info("Processing chunk [{}] from {}", chunk.getChunkIndex(), chunk.getSource());
-//        EmbeddedChunk embeddedChunk = embeddingService.embed(chunk);
-        vectorStoreService.store(chunk);
+    private Document toDocument(Chunk chunk) {
+
+        Map<String, Object> metadata = new HashMap<>();
+        Map<String,Object> mp = chunk.getMetadata();
+        metadata.put("source", chunk.getSource());
+        metadata.put("chunkIndex", chunk.getChunkIndex());
+        metadata.put("fileName",mp.get("fileName"));
+
+        if (chunk.getMetadata() != null) {
+            metadata.put("filename", chunk.getMetadata().get("fileName"));
+        }
+
+        return new Document(chunk.getContent(), metadata);
     }
+
+//    private void processChunk(Chunk chunk) {
+//        // e.g., vectorStore.save(chunk); or embeddingService.embed(chunk);
+//        log.info("Processing chunk [{}] from {}", chunk.getChunkIndex(), chunk.getSource());
+//        Map<String,Object> mp = chunk.getMetadata();
+//        Document document = new Document(
+//                chunk.getContent(),
+//                Map.of(
+//                        "source",chunk.getSource(),
+//                        "chunkIndex",chunk.getChunkIndex(),
+//                        "filename",mp.get("fileName")
+//                )
+//        );
+//        vectorStore.add(document);
+//
+//    }
 
     /*
         ExtractSection working:

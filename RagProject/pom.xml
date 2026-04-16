@@ -37,8 +37,12 @@
 		</dependency>
 <!--		<dependency>-->
 <!--			<groupId>org.springframework.ai</groupId>-->
-<!--			<artifactId>spring-ai-advisors-vector-store</artifactId>-->
+<!--			<artifactId>spring-ai-starter-vector-store-chroma</artifactId>-->
 <!--		</dependency>-->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-advisors-vector-store</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.eclipse.jgit</groupId>
 			<artifactId>org.eclipse.jgit</artifactId>
