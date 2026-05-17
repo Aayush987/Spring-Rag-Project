@@ -2,8 +2,10 @@ package com.aayush.RagProject.config;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 @Configuration
 public class ChatClientConfig {
@@ -12,8 +14,14 @@ public class ChatClientConfig {
     //Spring autoconfigures chatModel for us, we just need to configure a chatclient with
     //that chatmodel to call ai 
 
+//    @Bean
+//    public ChatClient chatClient(ChatModel chatModel) {
+//        return ChatClient.builder(chatModel).build();
+//    }
+
     @Bean
-    public ChatClient chatClient(ChatModel chatModel) {
+    @Primary
+    public ChatClient chatClient(OpenAiChatModel chatModel) {  // ← explicitly use OpenAi
         return ChatClient.builder(chatModel).build();
     }
 }

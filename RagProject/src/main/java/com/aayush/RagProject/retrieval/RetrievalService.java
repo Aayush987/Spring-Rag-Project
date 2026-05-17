@@ -65,7 +65,7 @@ public class RetrievalService {
             }
         }
 
-        Chunk chunk = new Chunk(source,chunkIndex, content, section,metadata);
+        Chunk chunk = new Chunk(content, chunkIndex, source, section, metadata);
 //        chunk.setSection(section);
 
         return chunk;

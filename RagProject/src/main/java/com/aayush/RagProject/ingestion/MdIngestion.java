@@ -4,6 +4,8 @@ import com.aayush.RagProject.chunking.model.Chunk;
 import com.aayush.RagProject.embedding.model.EmbeddedChunk;
 import com.aayush.RagProject.embedding.service.EmbeddingService;
 import com.aayush.RagProject.vectorstore.VectorStoreService;
+import io.qdrant.client.QdrantClient;
+import io.qdrant.client.grpc.Collections;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
@@ -30,8 +32,27 @@ public class MdIngestion {
     private final EmbeddingService embeddingService;
 //    private final VectorStoreService vectorStoreService;
     private final VectorStore vectorStore;
+    private final QdrantClient qdrantClient;
+
+    private boolean isAlreadyIngested() {
+        try {
+            Collections.CollectionInfo info = qdrantClient.getCollectionInfoAsync("rag-docs")
+                    .get();
+            long count = info.getPointsCount();
+            log.info("Qdrant collection has {} points", count);
+            return count > 0;
+        } catch (Exception e) {
+            log.warn("Could not check Qdrant collection, will proceed with ingestion: {}", e.getMessage());
+            return false;  // if collection doesn't exist yet, ingest
+        }
+    }
 
     public void ingestFiles() {
+
+        if (isAlreadyIngested()) {
+            log.info("✅ Docs already ingested in Qdrant, skipping ingestion.");
+            return;
+        }
         Path rootPath = Paths.get(DIRECTORY);
         try (Stream<Path> paths = Files.walk(rootPath)){
                 paths.filter(Files::isRegularFile)
